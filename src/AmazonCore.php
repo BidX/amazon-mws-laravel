@@ -112,8 +112,9 @@ abstract class AmazonCore
     protected $mockIndex = 0;
     protected $env;
     protected $marketplaceId;
-    protected $rawResponses = array();
+    public $rawResponses = array();
     protected $proxyInfo = [];
+    protected const SDK_CONFIG_ERROR_MESSAGE = "Class 'Config' not found";
 
     /**
      * AmazonCore constructor sets up key information used in all Amazon requests.
@@ -381,7 +382,13 @@ abstract class AmazonCore
 
     public function setConfig()
     {
-        $AMAZON_SERVICE_URL = Config::get('amazon-mws.AMAZON_SERVICE_URL');
+        try{
+            $AMAZON_SERVICE_URL = Config::get('amazon-mws.AMAZON_SERVICE_URL');
+        }catch (\Error $error){
+            if($error->getMessage() === self::SDK_CONFIG_ERROR_MESSAGE){
+                $AMAZON_SERVICE_URL = $_ENV['amazon-mws']['AMAZON_SERVICE_URL'];
+            }
+        }
 
         if (isset($AMAZON_SERVICE_URL)) {
             $this->urlbase = $AMAZON_SERVICE_URL;
@@ -409,7 +416,13 @@ abstract class AmazonCore
         //     throw new \Exception("Config file does not exist!");
         // }
 
-        $store = Config::get('amazon-mws.store');
+        try{
+            $store = Config::get('amazon-mws.store');
+        }catch (\Error $error){
+            if($error->getMessage() === self::SDK_CONFIG_ERROR_MESSAGE){
+                $store = $_ENV['amazon-mws.store'];
+            }
+        }
 
         if (array_key_exists($s, $store)) {
             $this->storeName = $s;
@@ -479,7 +492,13 @@ abstract class AmazonCore
         if ($msg != false) {
             $backtrace = debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS);
 
-            $muteLog = Config::get('amazon-mws.muteLog');
+            try{
+                $muteLog = Config::get('amazon-mws.muteLog');
+            }catch (\Error $error){
+                if($error->getMessage() === self::SDK_CONFIG_ERROR_MESSAGE){
+                    $muteLog = $_ENV['amazon-mws.muteLog'];
+                }
+            }
             if (isset($muteLog) && $muteLog == true) {
                 return;
             }
@@ -590,7 +609,13 @@ abstract class AmazonCore
         //     throw new Exception("Config file does not exist!");
         // }
 
-        $store = Config::get('amazon-mws.store');
+        try{
+            $store = Config::get('amazon-mws.store');
+        }catch (\Error $error){
+            if($error->getMessage() === self::SDK_CONFIG_ERROR_MESSAGE){
+                $store = $_ENV['amazon-mws.store'];
+            }
+        }
 
         if (array_key_exists($this->storeName, $store) && array_key_exists('secretKey', $store[$this->storeName])) {
             $secretKey = $store[$this->storeName]['secretKey'];
@@ -680,6 +705,23 @@ abstract class AmazonCore
         $s = ($this->throttleTime == 1) ? '' : 's';
         $this->log("Request was throttled, Sleeping for " . $this->throttleTime . " second$s", 'Throttle');
         sleep($this->throttleTime);
+    }
+
+
+    /**
+     * Set the sleep time in seconds when the request get throttled and rejected
+     * The request will be replayed after a specified period of time
+     * @param int $time <b>Time to sleep in seconds</b>
+     */
+    public function setThrottleTime($time)
+    {
+        if (!empty($time) && is_int($time)) {
+            $this->throttleTime = $time;
+        } else {
+            flush();
+            $this->log("Invalid time, throttle time will be set to 1 sec.", 'Throttle');
+            $this->throttleTime = 1;
+        }
     }
 
     /**
